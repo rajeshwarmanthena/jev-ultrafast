@@ -93,7 +93,11 @@ def test_all_heads_are_one_request_and_only_matching_head_executes(monkeypatch):
     d = model.choose(page(), "Find a book", [])
     assert len(calls) == 1
     assert d["operation"] == "TYPE_TEXT" and d["target"] == "1" and d["choice"] == "e1"
-    assert set(calls[0]["questions"]) == {"operation", "click_target", "type_text_target"}
+    assert set(calls[0]["questions"]) == {
+        "operation",
+        "click_target",
+    }
+    assert "type_text_target" not in calls[0]["questions"]
 
 
 def test_click_cannot_consume_a_text_target(monkeypatch):
@@ -318,3 +322,32 @@ def test_navigation_during_prediction_reobserves_without_action(runner):
     assert runner.state["status"] == "ready"
     assert runner.state["decision"] is None
     runner.state["browser"].act.assert_not_called()
+
+
+def test_singleton_target_skips_model_question(monkeypatch):
+    calls = []
+
+    def post(_url, _key, body):
+        calls.append(body)
+        return {
+            "model": "test",
+            "answers": {
+                "operation": choice(
+                    body["questions"]["operation"]["criteria"],
+                    "TYPE_TEXT",
+                ),
+            },
+        }
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test")
+    monkeypatch.setattr(model, "post_json", post)
+
+    decision = model.choose(page(), "Find a book", [])
+
+    assert len(calls) == 1
+    assert "type_text_target" not in calls[0]["questions"]
+    assert decision["operation"] == "TYPE_TEXT"
+    assert decision["target"] == "1"
+    assert decision["choice"] == "e1"
+    assert decision["target_probabilities"] == {"1": 1.0}
+    assert decision["target_confidence"] == 1.0

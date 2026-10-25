@@ -92,6 +92,8 @@ def choose(state, goal, history):
         "operation": {"type": "choice", "criteria": operations, "instructions": {"goal": goal, "rules": NEXT_ACTION}}
     }
     for operation, candidates in targets.items():
+        if len(candidates) == 1:
+            continue
         questions[operation.lower() + "_target"] = {
             "type": "choice",
             "criteria": {
@@ -124,7 +126,19 @@ def choose(state, goal, history):
     probabilities = {}
     if operation in targets:
         # Unused target heads cannot cause an action. Validate the head selected by the operation.
-        target_answer = validate_choice(result["answers"].get(operation.lower() + "_target", {}), targets[operation])
+        candidates = targets[operation]
+        if len(candidates) == 1:
+            target = next(iter(candidates))
+            target_answer = {
+                "choice": target,
+                "confidence": 1.0,
+                "probabilities": {target: 1.0},
+            }
+        else:
+            target_answer = validate_choice(
+                result["answers"].get(operation.lower() + "_target", {}),
+                candidates,
+            )
         target = target_answer["choice"]
         choice = targets[operation][target]["id"]
         probabilities = {a["id"]: target_answer["probabilities"][index] for index, a in targets[operation].items()}
